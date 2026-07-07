@@ -61,4 +61,7 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
     long calculateTotalStock();
 
     Page<Product> findByActiveTrue(Pageable pageable);
+
+    @Query("SELECT p.name FROM Product p WHERE p.active = true")
+    List<String> findAllActiveProductNames();
 }

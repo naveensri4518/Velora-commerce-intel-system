@@ -56,6 +56,9 @@ public class Product {
     @Column(name = "selling_price", nullable = false, precision = 12, scale = 2)
     private BigDecimal sellingPrice = BigDecimal.ZERO;
 
+    @Column(name = "tax_rate", precision = 5, scale = 2)
+    private BigDecimal taxRate = new BigDecimal("18.00");
+
     @Column(name = "current_stock", nullable = false)
     private Integer currentStock = 0;
 

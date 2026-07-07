@@ -15,6 +15,9 @@ import Settings from './pages/admin/Settings'
 import AuditLogs from './pages/admin/AuditLogs'
 import BillingPage from './pages/staff/BillingPage'
 import InvoicePrint from './pages/staff/InvoicePrint'
+import PriceCheck from './pages/staff/PriceCheck'
+import Returns from './pages/staff/Returns'
+import ShiftSummary from './pages/staff/ShiftSummary'
 
 export default function App() {
   return (
@@ -33,6 +36,9 @@ export default function App() {
             <Route path="settings" element={<AdminRoute><Settings /></AdminRoute>} />
             <Route path="audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
             <Route path="billing" element={<BillingPage />} />
+            <Route path="price-check" element={<PriceCheck />} />
+            <Route path="returns" element={<Returns />} />
+            <Route path="shift-summary" element={<ShiftSummary />} />
             <Route path="invoice/:id" element={<InvoicePrint />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

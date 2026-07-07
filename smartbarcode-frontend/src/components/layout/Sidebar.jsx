@@ -2,7 +2,8 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import {
   LayoutDashboard, Package, Warehouse, Users, FileText,
-  BarChart3, Settings, ClipboardList, ScanBarcode, LogOut, ShieldCheck
+  BarChart3, Settings, ClipboardList, ScanBarcode, LogOut, ShieldCheck,
+  Search, Undo2, CalendarDays
 } from 'lucide-react'
 
 const adminNav = [
@@ -26,9 +27,14 @@ const adminNav = [
 ]
 
 const staffNav = [
-  { label: 'POS', items: [
+  { label: 'POS Terminal', items: [
     { to: '/billing', icon: ScanBarcode, label: 'Billing' },
+    { to: '/price-check', icon: Search, label: 'Price Check' },
+    { to: '/returns', icon: Undo2, label: 'Returns' },
   ]},
+  { label: 'Management', items: [
+    { to: '/shift-summary', icon: CalendarDays, label: 'Shift Summary' },
+  ]}
 ]
 
 export default function Sidebar() {

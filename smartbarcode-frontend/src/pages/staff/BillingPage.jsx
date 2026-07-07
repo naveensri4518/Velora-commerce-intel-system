@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   ScanBarcode, Camera, Plus, Minus, Trash2, ShoppingCart,
-  User, Tag, CreditCard, CheckCircle, X, Loader
+  User, Tag, CreditCard, CheckCircle, X, Loader, Sparkles
 } from 'lucide-react'
 import { useCart } from '../../context/CartContext'
 import api from '../../api/axios'
@@ -47,7 +47,9 @@ function CameraScanner({ onDetect, onClose }) {
       clearTimeout(timeout)
       try {
         if (scanner && scanner.isScanning) scanner.stop()
-      } catch {}
+      } catch (e) {
+        // ignore
+      }
     }
   }, [onDetect])
 
@@ -83,7 +85,8 @@ export default function BillingPage() {
     discount, setDiscount, taxRate,
     paymentMethod, setPaymentMethod,
     customer, setCustomer,
-    subtotal, discountAmount, taxAmount, total
+    subtotal, discountAmount, taxAmount, total,
+    heldBills, holdCart, resumeCart
   } = useCart()
 
   const [barcodeInput, setBarcodeInput] = useState('')
@@ -91,7 +94,44 @@ export default function BillingPage() {
   const [showCamera, setShowCamera] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [lastInvoice, setLastInvoice] = useState(null)
+  
+  // Autocomplete state
+  const [suggestions, setSuggestions] = useState([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false)
+  const [selectedIndex, setSelectedIndex] = useState(-1)
   const barcodeRef = useRef(null)
+
+  const [aiRecommendations, setAiRecommendations] = useState([])
+  const [loadingAi, setLoadingAi] = useState(false)
+
+  // Fetch AI Recommendations when cart changes
+  useEffect(() => {
+    if (cart.length === 0) {
+      setAiRecommendations([])
+      return
+    }
+    const fetchRecommendations = async () => {
+      setLoadingAi(true)
+      try {
+        const itemNames = cart.map(item => item.name)
+        const res = await api.post('/ai/recommendations', { items: itemNames })
+        if (res.data.recommendations) {
+          const recs = res.data.recommendations.split(',').map(s => s.trim()).filter(Boolean)
+          setAiRecommendations(recs)
+        }
+      } catch (err) {
+        console.error('Failed to get AI recommendations', err)
+      } finally {
+        setLoadingAi(false)
+      }
+    }
+    
+    // Debounce AI call by 1 second to avoid spamming the API while scanning
+    const timeoutId = setTimeout(fetchRecommendations, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [cart])
+
   const navigate = useNavigate()
 
   // Focus barcode input only when page loads — NOT on every click
@@ -100,37 +140,99 @@ export default function BillingPage() {
     if (barcodeRef.current) barcodeRef.current.focus()
   }, [])
 
-  // Handle USB scanner: triggers on Enter key in barcode field
+  // Fetch suggestions with debounce
+  useEffect(() => {
+    if (!barcodeInput.trim()) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      setLoadingSuggestions(true)
+      try {
+        const res = await api.get('/products', {
+          params: { search: barcodeInput.trim(), size: 5 }
+        })
+        setSuggestions(res.data.content || [])
+        setShowSuggestions(true)
+        setSelectedIndex(-1)
+      } catch (err) {
+        console.error("Error fetching suggestions", err)
+      } finally {
+        setLoadingSuggestions(false)
+      }
+    }, 300)
+
+    return () => clearTimeout(timer)
+  }, [barcodeInput])
+
+  // Handle USB scanner and keyboard navigation
   const handleBarcodeKeyDown = (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'ArrowDown') {
       e.preventDefault()
-      scanBarcode()
+      if (showSuggestions && suggestions.length > 0) {
+        setSelectedIndex(prev => (prev < suggestions.length - 1 ? prev + 1 : prev))
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (showSuggestions && suggestions.length > 0) {
+        setSelectedIndex(prev => (prev > 0 ? prev - 1 : prev))
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (showSuggestions && selectedIndex >= 0 && selectedIndex < suggestions.length) {
+        const selected = suggestions[selectedIndex]
+        addToCart(selected)
+        setBarcodeInput('')
+        setShowSuggestions(false)
+        setSelectedIndex(-1)
+        toast.success(`Added: ${selected.name}`, { duration: 1500, position: 'bottom-right' })
+      } else {
+        scanBarcode()
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false)
     }
   }
 
-  const scanBarcode = useCallback(async (code) => {
+  const scanBarcode = async (code) => {
     const barcode = (code || barcodeInput).trim()
     if (!barcode) return
+
+    // If there are search suggestions visible and the user hits Add or Enter, add the first matching product
+    if (!code && showSuggestions && suggestions.length > 0) {
+      const selected = suggestions[selectedIndex >= 0 ? selectedIndex : 0]
+      addToCart(selected)
+      setBarcodeInput('')
+      setShowSuggestions(false)
+      setSelectedIndex(-1)
+      toast.success(`Added: ${selected.name}`, { duration: 1500, position: 'bottom-right' })
+      if (barcodeRef.current) barcodeRef.current.focus()
+      return
+    }
+
     setScanning(true)
     try {
       const res = await api.get(`/products/barcode/${encodeURIComponent(barcode)}`)
       addToCart(res.data)
       setBarcodeInput('')
+      setShowSuggestions(false)
       toast.success(`Added: ${res.data.name}`, { duration: 1500, position: 'bottom-right' })
     } catch (err) {
       toast.error(err.response?.data?.message || `Product not found: ${barcode}`)
       setBarcodeInput('')
+      setShowSuggestions(false)
     } finally {
       setScanning(false)
-      // Refocus barcode after scanning
       if (barcodeRef.current) barcodeRef.current.focus()
     }
-  }, [barcodeInput, addToCart])
+  }
 
-  const handleCameraDetect = useCallback((barcode) => {
+  const handleCameraDetect = (barcode) => {
     setShowCamera(false)
     scanBarcode(barcode)
-  }, [scanBarcode])
+  }
 
   const generateBill = async () => {
     if (cart.length === 0) { toast.error('Cart is empty'); return }
@@ -240,10 +342,65 @@ export default function BillingPage() {
                 value={barcodeInput}
                 onChange={e => setBarcodeInput(e.target.value)}
                 onKeyDown={handleBarcodeKeyDown}
-                placeholder="Scan or type barcode, press Enter..."
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onFocus={() => { if (barcodeInput.trim() && suggestions.length > 0) setShowSuggestions(true) }}
+                placeholder="Scan or type product name/barcode..."
                 style={{ paddingLeft: 38, background: scanning ? 'var(--color-accent-light)' : undefined }}
                 autoComplete="off"
               />
+              
+              {/* Autocomplete Dropdown */}
+              {showSuggestions && (barcodeInput.trim().length > 0) && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+                  background: 'var(--color-surface)', borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-lg)', border: '1px solid var(--color-border-light)',
+                  zIndex: 50, maxHeight: 300, overflowY: 'auto'
+                }}>
+                  {loadingSuggestions ? (
+                    <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--color-text-secondary)', textAlign: 'center' }}>
+                      <Loader size={14} className="animate-spin" style={{ display: 'inline-block', marginRight: 8, verticalAlign: 'middle' }} /> Searching...
+                    </div>
+                  ) : suggestions.length > 0 ? (
+                    suggestions.map((prod, idx) => (
+                      <div 
+                        key={prod.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault(); // Prevent blur
+                          addToCart(prod);
+                          setBarcodeInput('');
+                          setShowSuggestions(false);
+                          toast.success(`Added: ${prod.name}`, { duration: 1500, position: 'bottom-right' });
+                          if (barcodeRef.current) barcodeRef.current.focus();
+                        }}
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        style={{
+                          padding: '10px 16px',
+                          borderBottom: '1px solid var(--color-border-light)',
+                          cursor: 'pointer',
+                          background: selectedIndex === idx ? 'var(--color-accent-light)' : 'transparent',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: selectedIndex === idx ? 'var(--color-accent-dark)' : 'var(--color-text-primary)' }}>{prod.name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--color-text-tertiary)', fontFamily: 'monospace' }}>{prod.barcode}</div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--color-accent)' }}>₹{fmt(prod.sellingPrice)}</div>
+                          <div style={{ fontSize: 11, color: prod.currentStock > 0 ? 'var(--color-success)' : 'var(--color-danger)' }}>
+                            Stock: {prod.currentStock}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ padding: '12px 16px', fontSize: 13, color: 'var(--color-text-tertiary)', textAlign: 'center' }}>
+                      No products found.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <button className="btn btn-primary btn-sm" onClick={() => scanBarcode()} disabled={scanning || !barcodeInput.trim()}>
               {scanning ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : 'Add'}
@@ -258,7 +415,47 @@ export default function BillingPage() {
         </div>
 
         {/* Customer Info */}
-        <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--color-border-light)' }}>
+        <div style={{
+          padding: '16px 24px', borderBottom: '1px solid var(--color-border-light)',
+          background: 'var(--color-surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+        }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShoppingCart size={18} /> Order Summary
+            <span style={{ fontSize: 11, background: 'var(--color-accent)', color: 'white', padding: '2px 8px', borderRadius: 12 }}>
+              {cart.length} items
+            </span>
+          </h2>
+          
+          {heldBills.length > 0 && (
+            <div style={{ position: 'relative' }} className="held-bills-dropdown">
+              <select 
+                style={{ 
+                  fontSize: 13, 
+                  fontWeight: 700,
+                  padding: '6px 24px 6px 12px', 
+                  borderRadius: 20, 
+                  border: '1px solid #f59e0b', 
+                  background: '#fef3c7', 
+                  color: '#92400e', 
+                  cursor: 'pointer'
+                }}
+                onChange={(e) => {
+                  if (e.target.value) {
+                    resumeCart(Number(e.target.value));
+                    e.target.value = "";
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="" disabled>Resume Holds ({heldBills.length})</option>
+                {heldBills.map(b => (
+                  <option key={b.id} value={b.id}>{b.time} - {b.totalItems} items</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </div>
+          <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--color-border-light)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             <User size={13} color="var(--color-text-secondary)" />
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
@@ -282,6 +479,33 @@ export default function BillingPage() {
             />
           </div>
         </div>
+
+        {/* AI Upsell Recommendations */}
+        {(aiRecommendations.length > 0 || loadingAi) && (
+          <div style={{ padding: '12px 24px', background: 'linear-gradient(to right, #fdf4ff, #fae8ff)', borderBottom: '1px solid #f5d0fe' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, color: '#a21caf' }}>
+              <Sparkles size={14} />
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Smart Upsell</span>
+              {loadingAi && <Loader size={12} className="animate-spin" style={{ marginLeft: 'auto' }} />}
+            </div>
+            {!loadingAi && aiRecommendations.length > 0 && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {aiRecommendations.map((rec, i) => (
+                  <div key={i} style={{ 
+                    fontSize: 12, fontWeight: 600, color: '#86198f', background: '#f5d0fe', 
+                    padding: '4px 10px', borderRadius: 12, cursor: 'pointer', transition: 'background 0.2s'
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#e879f9'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#f5d0fe'}
+                  onClick={() => { setBarcodeInput(rec); barcodeRef.current?.focus() }}
+                  >
+                    + {rec}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Cart Items */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '8px 24px 16px' }}>
@@ -456,7 +680,7 @@ export default function BillingPage() {
                 </div>
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                <span style={{ color: 'var(--color-text-secondary)' }}>GST ({taxRate}%)</span>
+                <span style={{ color: 'var(--color-text-secondary)' }}>Total GST</span>
                 <span>₹{fmt(taxAmount)}</span>
               </div>
               <div style={{ height: 1, background: 'var(--color-border-light)', margin: '4px 0' }} />
@@ -471,12 +695,20 @@ export default function BillingPage() {
         {/* Generate Bill Button */}
         <div style={{
           padding: '16px 32px', background: 'var(--color-surface)',
-          borderTop: '1px solid var(--color-border-light)'
+          borderTop: '1px solid var(--color-border-light)', display: 'flex', gap: 12
         }}>
+          <button
+            className="btn btn-secondary"
+            style={{ flex: 0.3, justifyContent: 'center', fontSize: 14, fontWeight: 600 }}
+            onClick={holdCart}
+            disabled={cart.length === 0 || generating}
+          >
+            Hold Bill
+          </button>
           <button
             id="generate-bill-btn"
             className="btn btn-primary"
-            style={{ width: '100%', justifyContent: 'center', padding: '15px', fontSize: 16, fontWeight: 700 }}
+            style={{ flex: 1, justifyContent: 'center', padding: '15px', fontSize: 16, fontWeight: 700 }}
             onClick={generateBill}
             disabled={cart.length === 0 || generating}
           >

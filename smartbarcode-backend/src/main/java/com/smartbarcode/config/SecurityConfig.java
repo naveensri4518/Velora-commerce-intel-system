@@ -46,6 +46,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/products/barcode/**").hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/products", "/products/**").hasAnyRole("ADMIN", "STAFF")
                 .requestMatchers("/products/**").hasRole("ADMIN")
                 .requestMatchers("/staff/**").hasRole("ADMIN")
                 .requestMatchers("/reports/**").hasRole("ADMIN")
@@ -53,7 +54,8 @@ public class SecurityConfig {
                 .requestMatchers("/settings/**").hasRole("ADMIN")
                 .requestMatchers("/billing/**").hasAnyRole("ADMIN", "STAFF")
                 .requestMatchers("/invoices/generate").hasAnyRole("ADMIN", "STAFF")
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/invoices/*").hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/invoices", "/invoices/**").hasAnyRole("ADMIN", "STAFF")
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/invoices/*/refund").hasAnyRole("ADMIN", "STAFF")
                 .requestMatchers("/invoices/**").hasRole("ADMIN")
                 .requestMatchers("/categories/**").hasAnyRole("ADMIN", "STAFF")
                 .requestMatchers("/audit-logs/**").hasRole("ADMIN")
@@ -69,7 +71,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
+        config.setAllowedOriginPatterns(List.of("*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));

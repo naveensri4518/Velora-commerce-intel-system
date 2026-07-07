@@ -115,6 +115,27 @@ public class StaffController {
         return ResponseEntity.ok(Map.of("message", "Password reset successfully"));
     }
 
+    @PutMapping("/{id}/approve-password-reset")
+    public ResponseEntity<Map<String, String>> approvePasswordReset(@PathVariable Long id) {
+        User user = userRepository.findById(id)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        if (user.getPendingPassword() == null) {
+            throw new RuntimeException("No pending password reset for this user");
+        }
+        
+        user.setPassword(user.getPendingPassword());
+        user.setPendingPassword(null);
+        user.setFailedAttempts(0);
+        user.setLockTime(null);
+        userRepository.save(user);
+        
+        auditLogService.log(null, "admin", "PASSWORD_RESET_APPROVED", "USER", id.toString(),
+            "Approved password reset for " + user.getFullName());
+            
+        return ResponseEntity.ok(Map.of("message", "Password reset approved successfully"));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<User> getById(@PathVariable Long id) {
         return ResponseEntity.ok(userRepository.findById(id)

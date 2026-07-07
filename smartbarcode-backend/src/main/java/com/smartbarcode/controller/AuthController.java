@@ -32,4 +32,20 @@ public class AuthController {
     public ResponseEntity<Map<String, String>> logout() {
         return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, String>> forgotPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        authService.forgotPassword(email);
+        return ResponseEntity.ok(Map.of("message", "If the user exists, an OTP has been sent."));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, String>> resetPassword(@RequestBody Map<String, String> body) {
+        String email = body.get("email");
+        String otp = body.get("otp");
+        String newPassword = body.get("newPassword");
+        authService.resetPassword(email, otp, newPassword);
+        return ResponseEntity.ok(Map.of("message", "Password reset requested successfully. Awaiting admin approval."));
+    }
 }

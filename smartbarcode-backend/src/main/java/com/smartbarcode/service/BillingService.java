@@ -14,6 +14,8 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.HashMap;
 
 @Service
 @RequiredArgsConstructor
@@ -70,9 +72,25 @@ public class BillingService {
         }
 
         BigDecimal afterDiscount = subtotal.subtract(discountAmount);
-        BigDecimal taxRate = request.getTaxRate() != null ? request.getTaxRate() : new BigDecimal("18");
-        BigDecimal taxAmount = afterDiscount.multiply(taxRate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-        BigDecimal total = afterDiscount.add(taxAmount);
+        
+        // Calculate item-level tax
+        BigDecimal totalTaxAmount = BigDecimal.ZERO;
+        for (InvoiceItem item : items) {
+            BigDecimal itemDiscount = BigDecimal.ZERO;
+            if (subtotal.compareTo(BigDecimal.ZERO) > 0 && discountAmount.compareTo(BigDecimal.ZERO) > 0) {
+                itemDiscount = item.getSubtotal().divide(subtotal, 4, RoundingMode.HALF_UP).multiply(discountAmount);
+            }
+            BigDecimal itemNet = item.getSubtotal().subtract(itemDiscount);
+            
+            BigDecimal itemTaxRate = item.getProduct().getTaxRate() != null ? item.getProduct().getTaxRate() : new BigDecimal("18.00");
+            BigDecimal itemTax = itemNet.multiply(itemTaxRate).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+            
+            item.setTaxRate(itemTaxRate);
+            item.setTaxAmount(itemTax);
+            totalTaxAmount = totalTaxAmount.add(itemTax);
+        }
+        
+        BigDecimal total = afterDiscount.add(totalTaxAmount);
 
         // Generate invoice number
         String invoiceNumber = generateInvoiceNumber();
@@ -85,8 +103,8 @@ public class BillingService {
             .discountType(request.getDiscountType())
             .discountValue(request.getDiscountValue())
             .discountAmount(discountAmount)
-            .taxRate(taxRate)
-            .taxAmount(taxAmount)
+            .taxRate(null) // Global tax rate is no longer applicable
+            .taxAmount(totalTaxAmount)
             .total(total)
             .paymentMethod(request.getPaymentMethod())
             .status(Invoice.InvoiceStatus.COMPLETED)
@@ -138,6 +156,91 @@ public class BillingService {
     public Invoice getById(Long id) {
         return invoiceRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Invoice not found: " + id));
+    }
+
+    @Transactional
+    public Invoice refundInvoice(Long invoiceId, String username) {
+        User staff = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Invoice invoice = invoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new RuntimeException("Invoice not found: " + invoiceId));
+
+        if (invoice.getStatus() == Invoice.InvoiceStatus.REFUNDED) {
+            throw new RuntimeException("Invoice is already refunded");
+        }
+
+        // Add items back to stock
+        for (InvoiceItem item : invoice.getItems()) {
+            Product product = item.getProduct();
+            int oldStock = product.getCurrentStock();
+            int newStock = oldStock + item.getQuantity();
+            product.setCurrentStock(newStock);
+            productRepository.save(product);
+
+            InventoryLog invLog = InventoryLog.builder()
+                .product(product)
+                .action(InventoryLog.InventoryAction.STOCK_IN)
+                .quantityChanged(item.getQuantity())
+                .oldStock(oldStock)
+                .newStock(newStock)
+                .referenceId(invoice.getInvoiceNumber())
+                .notes("Refund via invoice " + invoice.getInvoiceNumber())
+                .userId(staff.getId())
+                .build();
+            inventoryLogRepository.save(invLog);
+        }
+
+        invoice.setStatus(Invoice.InvoiceStatus.REFUNDED);
+        Invoice savedInvoice = invoiceRepository.save(invoice);
+
+        auditLogService.log(staff.getId(), staff.getUsername(), "INVOICE_REFUNDED", "INVOICE",
+            savedInvoice.getId().toString(), "Invoice " + invoice.getInvoiceNumber() + " refunded. Total: ₹" + invoice.getTotal());
+
+        return savedInvoice;
+    }
+
+    public Map<String, Object> getShiftSummary(String username) {
+        User staff = userRepository.findByUsername(username)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+        LocalDateTime startOfDay = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
+        LocalDateTime endOfDay = LocalDateTime.now().withHour(23).withMinute(59).withSecond(59).withNano(999999999);
+
+        List<Invoice> todaysInvoices = invoiceRepository.findByCreatedByIdAndCreatedAtBetween(staff.getId(), startOfDay, endOfDay);
+        
+        long totalBills = 0;
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal cashTotal = BigDecimal.ZERO;
+        BigDecimal cardTotal = BigDecimal.ZERO;
+        BigDecimal upiTotal = BigDecimal.ZERO;
+        BigDecimal otherTotal = BigDecimal.ZERO;
+
+        for (Invoice inv : todaysInvoices) {
+            if (inv.getStatus() == Invoice.InvoiceStatus.COMPLETED) {
+                totalBills++;
+                totalRevenue = totalRevenue.add(inv.getTotal());
+                
+                switch (inv.getPaymentMethod()) {
+                    case CASH: cashTotal = cashTotal.add(inv.getTotal()); break;
+                    case CARD: cardTotal = cardTotal.add(inv.getTotal()); break;
+                    case UPI: upiTotal = upiTotal.add(inv.getTotal()); break;
+                    case OTHER: otherTotal = otherTotal.add(inv.getTotal()); break;
+                }
+            }
+        }
+
+        Map<String, Object> summary = new HashMap<>();
+        summary.put("date", startOfDay.toLocalDate().toString());
+        summary.put("staffName", staff.getFullName());
+        summary.put("totalBills", totalBills);
+        summary.put("totalRevenue", totalRevenue);
+        summary.put("cashTotal", cashTotal);
+        summary.put("cardTotal", cardTotal);
+        summary.put("upiTotal", upiTotal);
+        summary.put("otherTotal", otherTotal);
+        
+        return summary;
     }
 
     private String generateInvoiceNumber() {

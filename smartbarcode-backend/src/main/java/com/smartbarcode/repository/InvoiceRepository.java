@@ -18,8 +18,15 @@ public interface InvoiceRepository extends JpaRepository<Invoice, Long> {
 
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
+    List<Invoice> findByCreatedByIdAndCreatedAtBetween(Long createdById, LocalDateTime start, LocalDateTime end);
+
     @Query("SELECT COUNT(i) FROM Invoice i WHERE i.status = 'COMPLETED'")
     long countCompletedInvoices();
+
+    @Query("SELECT u.fullName, COALESCE(SUM(i.total), 0) FROM Invoice i JOIN i.createdBy u " +
+           "WHERE i.status = 'COMPLETED' AND i.createdAt >= :startDate " +
+           "GROUP BY u.fullName")
+    List<Object[]> getStaffSalesSince(@Param("startDate") LocalDateTime startDate);
 
     @Query("SELECT COALESCE(SUM(i.total), 0) FROM Invoice i WHERE i.status = 'COMPLETED' AND i.createdAt >= :startDate")
     BigDecimal sumRevenueSince(@Param("startDate") LocalDateTime startDate);

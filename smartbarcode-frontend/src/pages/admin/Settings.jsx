@@ -1,7 +1,21 @@
 import { useState, useEffect } from 'react'
-import { Save, Store } from 'lucide-react'
+import { Save } from 'lucide-react'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
+
+const Section = ({ title, children }) => (
+  <div className="card" style={{ marginBottom: 24 }}>
+    <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>{title}</h3>
+    <div className="form-grid">{children}</div>
+  </div>
+)
+
+const Field = ({ label, id, ...rest }) => (
+  <div className="form-group">
+    <label htmlFor={id}>{label}</label>
+    <input id={id} {...rest} />
+  </div>
+)
 
 export default function Settings() {
   const [settings, setSettings] = useState({})
@@ -29,20 +43,6 @@ export default function Settings() {
   }
 
   if (loading) return <div style={{ padding: 48, textAlign: 'center' }}><div className="loading-spinner" /></div>
-
-  const Section = ({ title, children }) => (
-    <div className="card" style={{ marginBottom: 24 }}>
-      <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20 }}>{title}</h3>
-      <div className="form-grid">{children}</div>
-    </div>
-  )
-
-  const Field = ({ label, id, ...rest }) => (
-    <div className="form-group">
-      <label htmlFor={id}>{label}</label>
-      <input id={id} {...rest} />
-    </div>
-  )
 
   return (
     <div className="animate-fade-in">

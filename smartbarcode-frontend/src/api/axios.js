@@ -1,6 +1,6 @@
 import axios from 'axios'
 const api = axios.create({
-  baseURL: 'http://localhost:8080/api',
+  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api',
   headers: { 'Content-Type': 'application/json' },
   timeout: 10000,
 })
@@ -23,7 +23,8 @@ api.interceptors.response.use(
       const refresh = localStorage.getItem('smartbarcode_refresh')
       if (refresh) {
         try {
-          const res = await axios.post('http://localhost:8080/api/auth/refresh', { refreshToken: refresh })
+          const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api'
+          const res = await axios.post(`${baseUrl}/auth/refresh`, { refreshToken: refresh })
           localStorage.setItem('smartbarcode_token', res.data.accessToken)
           original.headers.Authorization = `Bearer ${res.data.accessToken}`
           return api(original)

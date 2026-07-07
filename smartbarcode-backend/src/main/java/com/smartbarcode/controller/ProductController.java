@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/products")
@@ -61,6 +62,12 @@ public class ProductController {
         Long userId = getUserId(auth);
         productService.delete(id, auth.getName(), userId);
         return ResponseEntity.ok(Map.of("message", "Product deleted successfully"));
+    }
+
+    @PostMapping("/import")
+    public ResponseEntity<Map<String, Object>> importCsv(@RequestParam("file") MultipartFile file, Authentication auth) {
+        Long userId = getUserId(auth);
+        return ResponseEntity.ok(productService.importCsv(file, auth.getName(), userId));
     }
 
     @GetMapping("/low-stock")

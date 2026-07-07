@@ -780,3 +780,26 @@ tbody tr:hover td {
   border: 2px solid var(--color-bg);
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-tertiary); }
+
+/* Print Styles */
+@media print {
+  .sidebar, .topbar, .no-print {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin-left: 0 !important;
+  }
+  
+  .page-content {
+    padding: 0 !important;
+  }
+
+  body {
+    background: white !important;
+  }
+  
+  .app-layout {
+    display: block !important;
+  }
+}

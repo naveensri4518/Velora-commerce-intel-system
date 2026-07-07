@@ -82,7 +82,8 @@ export default function Dashboard() {
       }))
       setMonthlySales(monthly)
     } catch (err) {
-      toast.error('Failed to load dashboard data')
+      console.error("Dashboard fetch error:", err);
+      toast.error('Failed to load dashboard data: ' + (err.message || 'Unknown error'))
     } finally {
       setLoading(false)
     }

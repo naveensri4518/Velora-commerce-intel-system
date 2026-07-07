@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -24,6 +25,9 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
     private final AuditLogService auditLogService;
+    private final OtpService otpService;
+    private final EmailService emailService;
+    private final PasswordEncoder passwordEncoder;
 
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByUsername(request.getUsername())
@@ -117,5 +121,39 @@ public class AuthService {
             .role(user.getRole().name())
             .userId(user.getId())
             .build();
+    }
+
+    public void forgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole() == User.Role.ROLE_ADMIN) {
+            throw new RuntimeException("Admin cannot use forgot password. Please reset it from Settings.");
+        }
+
+        String otp = otpService.generateAndStoreOtp(user.getEmail());
+        emailService.sendForgotPasswordOtp(user.getEmail(), otp);
+        
+        auditLogService.log(user.getId(), user.getUsername(), "FORGOT_PASSWORD", "USER", user.getId().toString(),
+            "Forgot password requested for " + user.getUsername());
+    }
+
+    public void resetPassword(String email, String otp, String newPassword) {
+        User user = userRepository.findByEmail(email)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole() == User.Role.ROLE_ADMIN) {
+            throw new RuntimeException("Admin cannot use forgot password. Please reset it from Settings.");
+        }
+
+        if (!otpService.verifyOtp(user.getEmail(), otp)) {
+            throw new RuntimeException("Invalid or expired OTP");
+        }
+
+        user.setPendingPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+
+        auditLogService.log(user.getId(), user.getUsername(), "PASSWORD_RESET_REQUESTED", "USER", user.getId().toString(),
+            "Password reset requested for " + user.getUsername() + ". Awaiting admin approval.");
     }
 }

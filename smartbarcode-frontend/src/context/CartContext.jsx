@@ -8,6 +8,9 @@ export function CartProvider({ children }) {
   const [taxRate, setTaxRate] = useState(18)
   const [paymentMethod, setPaymentMethod] = useState('CASH')
   const [customer, setCustomer] = useState({ name: '', phone: '' })
+  
+  // Hold Bill State
+  const [heldBills, setHeldBills] = useState([])
 
   const addToCart = useCallback((product) => {
     setCart(prev => {
@@ -24,6 +27,7 @@ export function CartProvider({ children }) {
         name: product.name,
         barcode: product.barcode,
         unitPrice: product.sellingPrice,
+        taxRate: product.taxRate, // store product-specific tax rate
         quantity: 1,
         maxStock: product.currentStock
       }]
@@ -50,6 +54,29 @@ export function CartProvider({ children }) {
     setCustomer({ name: '', phone: '' })
   }, [])
 
+  const holdCart = useCallback(() => {
+    if (cart.length === 0) return
+    setHeldBills(prev => [...prev, {
+      id: Date.now(),
+      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+      cart: [...cart],
+      discount: { ...discount },
+      customer: { ...customer },
+      totalItems: cart.length
+    }])
+    clearCart()
+  }, [cart, discount, customer, clearCart])
+
+  const resumeCart = useCallback((heldBillId) => {
+    const bill = heldBills.find(b => b.id === heldBillId)
+    if (bill) {
+      setCart(bill.cart)
+      setDiscount(bill.discount)
+      setCustomer(bill.customer)
+      setHeldBills(prev => prev.filter(b => b.id !== heldBillId))
+    }
+  }, [heldBills])
+
   const subtotal = cart.reduce((sum, item) => sum + (item.unitPrice * item.quantity), 0)
 
   const discountAmount = discount.type === 'PERCENTAGE'
@@ -57,7 +84,18 @@ export function CartProvider({ children }) {
     : Math.min(discount.value, subtotal)
 
   const afterDiscount = subtotal - discountAmount
-  const taxAmount = (afterDiscount * taxRate) / 100
+
+  const taxAmount = cart.reduce((sum, item) => {
+    const itemSubtotal = item.unitPrice * item.quantity
+    let itemDiscount = 0
+    if (subtotal > 0 && discountAmount > 0) {
+      itemDiscount = (itemSubtotal / subtotal) * discountAmount
+    }
+    const itemNet = itemSubtotal - itemDiscount
+    const itemTaxRate = item.taxRate != null ? item.taxRate : taxRate
+    return sum + (itemNet * itemTaxRate) / 100
+  }, 0)
+
   const total = afterDiscount + taxAmount
 
   return (
@@ -67,7 +105,8 @@ export function CartProvider({ children }) {
       taxRate, setTaxRate,
       paymentMethod, setPaymentMethod,
       customer, setCustomer,
-      subtotal, discountAmount, taxAmount, total
+      subtotal, discountAmount, taxAmount, total,
+      heldBills, holdCart, resumeCart
     }}>
       {children}
     </CartContext.Provider>

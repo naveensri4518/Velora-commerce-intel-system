@@ -1,14 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Search, Edit2, Trash2, AlertTriangle, Package, Filter, X, RefreshCw, Barcode as BarcodeIcon, Printer, Download } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Plus, Search, Edit2, Trash2, Package, X, RefreshCw, Barcode as BarcodeIcon, Printer, Download, Upload, Sparkles, Loader } from 'lucide-react'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
 import Barcode from 'react-barcode'
 
 const EMPTY_PRODUCT = {
   barcode: '', name: '', brand: '', description: '',
-  purchasePrice: '', sellingPrice: '', currentStock: '',
+  purchasePrice: '', sellingPrice: '', taxRate: '18', currentStock: '',
   minStockLevel: 10, unit: 'pcs', expiryDate: '',
-  categoryId: '', supplierId: ''
+  categoryId: '', supplierId: '', imageUrl: ''
 }
 
 function StockBadge({ product }) {
@@ -19,12 +19,121 @@ function StockBadge({ product }) {
   return <span className="badge badge-success">In Stock</span>
 }
 
+function ImportModal({ onClose, onSave }) {
+  const [file, setFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)
+
+  const handleDownloadTemplate = () => {
+    const template = "Barcode,Name,Brand,Category,Supplier,Unit,Purchase Price,Selling Price,Tax Rate,Current Stock,Min Stock,Expiry Date\n123456789,Sample Product,Sample Brand,Dairy,,pcs,10.00,15.00,5,100,10,2026-12-31\n"
+    const blob = new Blob([template], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'smartbarcode_products_template.csv'
+    a.click()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleUpload = async () => {
+    if (!file) {
+      toast.error('Please select a CSV file first')
+      return
+    }
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await api.post('/products/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      toast.success(`Import complete! Successfully added ${res.data.successCount} products. Skipped ${res.data.skipCount} products.`)
+      onSave()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to import CSV')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 480 }}>
+        <div className="modal-header">
+          <h3>Import Products (CSV)</h3>
+          <button className="btn-icon btn-ghost" onClick={onClose}><X size={18} /></button>
+        </div>
+        <div className="modal-body" style={{ textAlign: 'center' }}>
+          <Package size={48} style={{ opacity: 0.2, margin: '0 auto 16px' }} />
+          <p style={{ marginBottom: 16, color: 'var(--color-text-secondary)', fontSize: 14 }}>
+            You can upload a CSV file to add hundreds of products at once.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 24 }}>
+            <button className="btn btn-secondary btn-sm" onClick={handleDownloadTemplate}>
+              <Download size={14} /> Download Template
+            </button>
+            <input 
+              type="file" 
+              accept=".csv" 
+              style={{ display: 'none' }} 
+              ref={fileInputRef}
+              onChange={e => setFile(e.target.files[0])}
+            />
+            <button className="btn btn-secondary btn-sm" onClick={() => fileInputRef.current.click()}>
+              Choose File
+            </button>
+          </div>
+          {file && (
+            <div style={{ padding: 12, background: 'var(--color-accent-light)', borderRadius: 8, fontSize: 13, fontWeight: 600, color: 'var(--color-accent-dark)' }}>
+              Selected File: {file.name}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn btn-primary" disabled={!file || uploading} onClick={handleUpload}>
+            <Upload size={16} /> {uploading ? 'Importing...' : 'Upload & Import'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ProductModal({ product, categories, suppliers, onClose, onSave }) {
   const [form, setForm] = useState(product || EMPTY_PRODUCT)
   const [saving, setSaving] = useState(false)
+  const [loadingAi, setLoadingAi] = useState(false)
   const isEdit = !!product?.id
 
   const set = (key, val) => setForm(f => ({ ...f, [key]: val }))
+
+  const handleAiCategorize = async () => {
+    if (!form.name.trim()) {
+      toast.error('Please enter a product name first')
+      return
+    }
+    setLoadingAi(true)
+    try {
+      const res = await api.post('/ai/categorize', { name: form.name })
+      const aiData = JSON.parse(res.data.response)
+      
+      const updates = {}
+      if (aiData.categoryId) updates.categoryId = aiData.categoryId
+      if (aiData.estimatedPrice) {
+        updates.sellingPrice = aiData.estimatedPrice
+        updates.purchasePrice = (aiData.estimatedPrice * 0.7).toFixed(2)
+      }
+      
+      setForm(f => ({ ...f, ...updates }))
+      toast.success('AI populated Category & Price')
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to get AI categorization')
+    } finally {
+      setLoadingAi(false)
+    }
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -66,8 +175,15 @@ function ProductModal({ product, categories, suppliers, onClose, onSave }) {
               </div>
               <div className="form-group">
                 <label>Product Name *</label>
-                <input value={form.name} onChange={e => set('name', e.target.value)}
-                  placeholder="Product name" required />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input value={form.name} onChange={e => set('name', e.target.value)}
+                    placeholder="Product name" required style={{ flex: 1 }} />
+                  <button type="button" className="btn btn-secondary btn-icon" title="AI Auto-Fill Category & Price" 
+                    onClick={handleAiCategorize} disabled={loadingAi || !form.name.trim()} 
+                    style={{ background: 'var(--color-accent-light)', color: 'var(--color-accent-dark)', border: 'none', padding: '0 12px' }}>
+                    {loadingAi ? <Loader size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                  </button>
+                </div>
               </div>
               <div className="form-group">
                 <label>Brand</label>
@@ -105,6 +221,12 @@ function ProductModal({ product, categories, suppliers, onClose, onSave }) {
                   onChange={e => set('sellingPrice', e.target.value)} placeholder="0.00" required />
               </div>
               <div className="form-group">
+                <label>Tax Rate (GST %)</label>
+                <select value={form.taxRate} onChange={e => set('taxRate', e.target.value)}>
+                  {[0, 5, 12, 18, 28].map(t => <option key={t} value={t}>{t}%</option>)}
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Current Stock</label>
                 <input type="number" value={form.currentStock}
                   onChange={e => set('currentStock', e.target.value)} placeholder="0" />
@@ -117,6 +239,11 @@ function ProductModal({ product, categories, suppliers, onClose, onSave }) {
               <div className="form-group">
                 <label>Expiry Date</label>
                 <input type="date" value={form.expiryDate} onChange={e => set('expiryDate', e.target.value)} />
+              </div>
+              <div className="form-group full">
+                <label>Image URL</label>
+                <input value={form.imageUrl || ''} onChange={e => set('imageUrl', e.target.value)} 
+                  placeholder="e.g. https://example.com/product-image.jpg" />
               </div>
               <div className="form-group full">
                 <label>Description</label>
@@ -146,6 +273,7 @@ export default function Products() {
   const [selectedCategory, setSelectedCategory] = useState('')
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState(null) // null | {} | {product}
+  const [importModal, setImportModal] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [barcodeModal, setBarcodeModal] = useState(null)
 
@@ -165,13 +293,14 @@ export default function Products() {
       setPagination({ page: prodRes.data.number, totalPages: prodRes.data.totalPages, totalElements: prodRes.data.totalElements })
       setCategories(catRes.data || [])
       setSuppliers(supRes.data || [])
-    } catch (err) {
+    } catch {
       toast.error('Failed to load products')
     } finally {
       setLoading(false)
     }
   }, [search, selectedCategory])
 
+  // eslint-disable-next-line
   useEffect(() => { fetchData() }, [fetchData])
 
   const handleDelete = async (product) => {
@@ -180,7 +309,7 @@ export default function Products() {
       toast.success('Product deleted')
       setDeleteConfirm(null)
       fetchData()
-    } catch (err) {
+    } catch {
       toast.error('Failed to delete product')
     }
   }
@@ -194,9 +323,14 @@ export default function Products() {
           <div className="page-title">Products</div>
           <div className="page-subtitle">{pagination.totalElements} products in catalog</div>
         </div>
-        <button className="btn btn-primary" onClick={() => setModal({})}>
-          <Plus size={16} /> Add Product
-        </button>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button className="btn btn-secondary" onClick={() => setImportModal(true)}>
+            <Upload size={16} /> Import CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setModal({})}>
+            <Plus size={16} /> Add Product
+          </button>
+        </div>
       </div>
 
       {/* Search & Filters */}
@@ -349,6 +483,17 @@ export default function Products() {
       {/* Barcode Modal */}
       {barcodeModal && (
         <BarcodeModal product={barcodeModal} onClose={() => setBarcodeModal(null)} />
+      )}
+
+      {/* Import Modal */}
+      {importModal && (
+        <ImportModal
+          onClose={() => setImportModal(false)}
+          onSave={() => {
+            setImportModal(false)
+            fetchData()
+          }}
+        />
       )}
     </div>
   )

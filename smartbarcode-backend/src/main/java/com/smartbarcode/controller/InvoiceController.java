@@ -14,6 +14,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/invoices")
@@ -42,5 +43,15 @@ public class InvoiceController {
     @GetMapping("/{id}")
     public ResponseEntity<Invoice> getById(@PathVariable Long id) {
         return ResponseEntity.ok(billingService.getById(id));
+    }
+
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<Invoice> refundInvoice(@PathVariable Long id, Authentication auth) {
+        return ResponseEntity.ok(billingService.refundInvoice(id, auth.getName()));
+    }
+
+    @GetMapping("/shift-summary")
+    public ResponseEntity<Map<String, Object>> getShiftSummary(Authentication auth) {
+        return ResponseEntity.ok(billingService.getShiftSummary(auth.getName()));
     }
 }

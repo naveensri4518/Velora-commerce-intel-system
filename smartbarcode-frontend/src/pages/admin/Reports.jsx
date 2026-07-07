@@ -39,6 +39,7 @@ export default function Reports() {
     finally { setLoading(false) }
   }
 
+  // eslint-disable-next-line
   useEffect(() => { fetchReport() }, [period])
 
   const exportExcel = () => {

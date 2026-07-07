@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "users")
 @Data
 @NoArgsConstructor
+
 @AllArgsConstructor
 @Builder
 @EntityListeners(AuditingEntityListener.class)
@@ -37,6 +38,16 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @JsonIgnore
+    @Column(name = "pending_password")
+    private String pendingPassword;
+
+    @Transient
+    @com.fasterxml.jackson.annotation.JsonProperty("hasPendingPasswordReset")
+    public boolean getHasPendingPasswordReset() {
+        return pendingPassword != null;
+    }
+
     @Column(name = "full_name", nullable = false, length = 100)
     private String fullName;
 
@@ -44,12 +55,14 @@ public class User {
     @Column(nullable = false)
     private Role role;
 
+    @Builder.Default
     @Column(nullable = false)
     private Boolean active = true;
 
     @Column(length = 15)
     private String phone;
 
+    @Builder.Default
     @Column(name = "failed_attempts", nullable = false)
     private Integer failedAttempts = 0;
 

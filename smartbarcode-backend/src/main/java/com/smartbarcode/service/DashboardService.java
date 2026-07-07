@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,7 +26,14 @@ public class DashboardService {
 
     public DashboardStats getStats() {
         LocalDateTime startOfDay = LocalDateTime.of(LocalDate.now(), LocalTime.MIDNIGHT);
+        LocalDateTime startOfYesterday = startOfDay.minusDays(1);
         LocalDateTime startOfMonth = LocalDateTime.of(LocalDate.now().withDayOfMonth(1), LocalTime.MIDNIGHT);
+
+        List<Object[]> staffSalesRaw = invoiceRepository.getStaffSalesSince(startOfDay);
+        Map<String, BigDecimal> staffSalesMap = new HashMap<>();
+        for (Object[] row : staffSalesRaw) {
+            staffSalesMap.put((String) row[0], (BigDecimal) row[1]);
+        }
 
         return DashboardStats.builder()
             .totalProducts(productRepository.countActiveProducts())
@@ -34,9 +42,11 @@ public class DashboardService {
             .lowStockProducts(productRepository.countLowStockProducts())
             .outOfStockProducts(productRepository.countOutOfStockProducts())
             .todayRevenue(invoiceRepository.sumRevenueSince(startOfDay))
+            .yesterdayRevenue(invoiceRepository.sumRevenueBetween(startOfYesterday, startOfDay))
             .monthlyRevenue(invoiceRepository.sumRevenueSince(startOfMonth))
             .totalInvoices(invoiceRepository.countCompletedInvoices())
             .activeStaff(userRepository.countByRoleAndActiveTrue(User.Role.ROLE_STAFF))
+            .staffSalesToday(staffSalesMap)
             .build();
     }
 

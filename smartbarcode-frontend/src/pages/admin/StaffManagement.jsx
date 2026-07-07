@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Edit2, UserX, UserCheck, Key, X, Users, Trash2 } from 'lucide-react'
+import { Plus, Edit2, UserX, UserCheck, Key, X, Users, Trash2, CheckSquare } from 'lucide-react'
 import api from '../../api/axios'
 import toast from 'react-hot-toast'
 
@@ -161,6 +161,7 @@ export default function StaffManagement() {
     finally { setLoading(false) }
   }
 
+  // eslint-disable-next-line
   useEffect(() => { fetchStaff() }, [])
 
   const toggleActive = async (s) => {
@@ -183,6 +184,16 @@ export default function StaffManagement() {
       setResetModal(null)
       setNewPassword('')
     } catch { toast.error('Failed to reset password') }
+  }
+
+  const approvePasswordReset = async (s) => {
+    try {
+      await api.put(`/staff/${s.id}/approve-password-reset`)
+      toast.success('Password reset approved successfully')
+      fetchStaff()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to approve password reset')
+    }
   }
 
   const deleteStaff = async (s) => {
@@ -249,7 +260,16 @@ export default function StaffManagement() {
                       </div>
                     </td>
                     <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{s.username}</td>
-                    <td>{s.email}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {s.email}
+                        {s.hasPendingPasswordReset && (
+                          <span className="badge badge-warning" style={{ fontSize: 10, padding: '2px 6px' }} title="User requested password reset">
+                            Reset Pending
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td>{s.phone || '—'}</td>
                     <td>
                       <span className={`badge ${s.role === 'ROLE_ADMIN' ? 'badge-info' : 'badge-neutral'}`}>
@@ -273,6 +293,13 @@ export default function StaffManagement() {
                           onClick={() => toggleActive(s)}>
                           {s.active ? <UserX size={15} /> : <UserCheck size={15} />}
                         </button>
+                        {s.hasPendingPasswordReset && (
+                          <button className="btn btn-icon btn-sm"
+                            style={{ background: 'var(--color-success-bg)', color: 'var(--color-success)', border: 'none' }}
+                            title="Approve Password Reset" onClick={() => approvePasswordReset(s)}>
+                            <CheckSquare size={15} />
+                          </button>
+                        )}
                         <button className="btn btn-icon btn-sm"
                           style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)', border: 'none' }}
                           title="Reset Password" onClick={() => setResetModal(s)}>

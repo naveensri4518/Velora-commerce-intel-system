@@ -131,6 +131,8 @@ export default function InvoicePrint() {
               <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6e6e73' }}>Unit Price</th>
               <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6e6e73' }}>GST</th>
+              <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 700,
                 textTransform: 'uppercase', letterSpacing: '0.05em', color: '#6e6e73' }}>Amount</th>
             </tr>
           </thead>
@@ -143,6 +145,7 @@ export default function InvoicePrint() {
                 </td>
                 <td style={{ textAlign: 'center', padding: '12px 0', fontWeight: 700 }}>{item.quantity}</td>
                 <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 13 }}>{fmt(item.unitPrice)}</td>
+                <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 13 }}>{item.taxRate || 0}%</td>
                 <td style={{ textAlign: 'right', padding: '12px 0', fontWeight: 700 }}>{fmt(item.subtotal)}</td>
               </tr>
             ))}
@@ -155,7 +158,7 @@ export default function InvoicePrint() {
             {[
               ['Subtotal', fmt(invoice.subtotal)],
               invoice.discountAmount > 0 ? [`Discount (${invoice.discountType})`, `−${fmt(invoice.discountAmount)}`] : null,
-              [`GST (${invoice.taxRate}%)`, fmt(invoice.taxAmount)],
+              [`Total GST`, fmt(invoice.taxAmount)],
             ].filter(Boolean).map(([label, value]) => (
               <div key={label} style={{ display: 'flex', justifyContent: 'space-between',
                 padding: '6px 0', fontSize: 13, borderBottom: '1px solid #e8e8ed' }}>
