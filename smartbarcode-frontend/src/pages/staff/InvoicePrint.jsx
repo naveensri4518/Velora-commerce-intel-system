@@ -72,7 +72,7 @@ export default function InvoicePrint() {
 
       {/* Invoice A4 */}
       <div style={{
-        maxWidth: 720, margin: '24px auto', background: 'white',
+        maxWidth: 720, margin: '24px auto', background: 'white', color: '#1d1d1f',
         boxShadow: 'var(--shadow-lg)', borderRadius: 12,
         padding: '40px 48px', fontFamily: 'Inter, sans-serif'
       }}>
@@ -140,14 +140,14 @@ export default function InvoicePrint() {
           <tbody>
             {(invoice.items || []).map((item, i) => (
               <tr key={i} style={{ borderBottom: '1px solid #e8e8ed' }}>
-                <td style={{ padding: '12px 0' }}>
+                <td style={{ padding: '12px 0', color: '#1d1d1f' }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{item.productName}</div>
                   <div style={{ fontSize: 11, color: '#aeaeb2', fontFamily: 'monospace' }}>{item.productBarcode}</div>
                 </td>
-                <td style={{ textAlign: 'center', padding: '12px 0', fontWeight: 700 }}>{item.quantity}</td>
-                <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 13 }}>{fmt(item.unitPrice)}</td>
-                <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 13 }}>{item.taxRate || 0}%</td>
-                <td style={{ textAlign: 'right', padding: '12px 0', fontWeight: 700 }}>{fmt(item.subtotal)}</td>
+                <td style={{ textAlign: 'center', padding: '12px 0', fontWeight: 700, color: '#1d1d1f' }}>{item.quantity}</td>
+                <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 13, color: '#1d1d1f' }}>{fmt(item.unitPrice)}</td>
+                <td style={{ textAlign: 'right', padding: '12px 0', fontSize: 13, color: '#1d1d1f' }}>{item.taxRate || 0}%</td>
+                <td style={{ textAlign: 'right', padding: '12px 0', fontWeight: 700, color: '#1d1d1f' }}>{fmt(item.subtotal)}</td>
               </tr>
             ))}
           </tbody>
