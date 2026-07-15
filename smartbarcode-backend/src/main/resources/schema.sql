@@ -180,10 +180,10 @@ INSERT IGNORE INTO products (barcode, name, category_id, brand, supplier_id, pur
 
 -- Default Settings
 INSERT IGNORE INTO settings (setting_key, setting_value, description) VALUES
-('store_name', 'SmartBarcode Retail', 'Store display name'),
+('store_name', 'Velora Retail', 'Store display name'),
 ('store_address', '123 Main Street, Hyderabad, Telangana 500001', 'Store address for invoices'),
 ('store_phone', '+91 98765 43210', 'Store contact number'),
-('store_email', 'contact@smartbarcode.com', 'Store email'),
+('store_email', 'contact@velora.com', 'Store email'),
 ('gst_rate', '18', 'Default GST rate percentage'),
 ('currency_symbol', '₹', 'Currency symbol'),
 ('invoice_prefix', 'INV', 'Invoice number prefix'),

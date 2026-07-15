@@ -14,7 +14,7 @@
     <groupId>com.smartbarcode</groupId>
     <artifactId>smartbarcode-backend</artifactId>
     <version>1.0.0</version>
-    <name>SmartBarcode Backend</name>
+    <name>Velora Backend</name>
     <description>Enterprise Retail Inventory Management and POS Billing Platform</description>
     <packaging>jar</packaging>
 
